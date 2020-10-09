@@ -39,6 +39,8 @@ False :: Bool
 [take, drop, \x y -> [y !! x]] :: [Int -> [a] -> [a]]
 -}
 
+-- D
+
 foo1 :: a -> b -> (a, b)
 foo1 x y = (x, y)
 
