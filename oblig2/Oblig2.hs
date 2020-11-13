@@ -1,50 +1,12 @@
--- Kristoffer Davidsen
+-- Kristoffer Davidsen, gruppe 4
+
+-- 5 (s 2 3, b 3 3) 3 3 1 3 2 1 3 2 2 3
 
 import Data.List ((\\))
 
 type Board = [Pos]
 
 type Pos = (Int, Int)
-
-clr :: IO ()
-clr = putStr "\ESC[2J"
-
-isAlive :: Board -> Pos -> Bool
-isAlive b p = p `elem` b
-
-isEmpty :: Board -> Pos -> Bool
-isEmpty b p = not (isAlive b p)
-
-readMatrix :: [String] -> Board
-readMatrix xs = [(x, y) | x <- [0 .. length xs -1], y <- [0 .. length xs -1], xs !! x !! y /= '.']
-
-writeTop :: (Show a, Integral a) => a -> IO ()
-writeTop nR = writeAt (lft + 1, 0) (concat [show (mod i 10) ++ " " | i <- [1 .. nR]] ++ "\n")
-
-lft :: Integer
-lft = 3
-
-writeAt :: (Show a1, Show a2) => (a2, a1) -> String -> IO ()
-writeAt (x, y) xs = do
-  goto (x, y)
-  putStr xs
-
-goto :: (Show a1, Show a2) => (a2, a1) -> IO ()
-goto (x, y) = putStr ("\ESC[" ++ show y ++ ";" ++ show x ++ "H")
-
-writeRow :: (Show a1, Ord a1, Num a1, Num a2, Enum a2) => a1 -> a2 -> IO ()
-writeRow i nR = do
-  writeAt (if i > 9 then lft - 2 else lft - 1, 1 + i) (show i)
-  mapM_ (\i -> putStr " .") [1 .. nR]
-  putStrLn ""
-
-brett :: (Show a1, Integral a1) => a1 -> IO ()
-brett nR
-  | nR < 99 && nR > 0 = do
-    clr
-    writeTop nR
-    mapM_ (`writeRow` nR) [1 .. nR]
-  | otherwise = error "Number must be bigger than 0 and lower than 99"
 
 main :: IO ()
 main = do
@@ -66,18 +28,16 @@ main = do
 repeat' :: Board -> Int -> [Int] -> [Int] -> IO ()
 repeat' board length s b = do
   cmd <- getLine
+  clearMessage length
   let commands = words cmd
   if not (null commands)
     then command commands board length s b
     else repeat' board length s b
 
-convert :: [String] -> [Pos]
-convert [] = []
-convert (x : y : xs)
-  | null x || null y = []
-  | otherwise = (read x, read y) : convert xs
-
 command :: [String] -> Board -> Int -> [Int] -> [Int] -> IO ()
+command [] board nR s b = do
+  writeAt (0, nR + 4) "Mangler kommando, proev igjen."
+  repeat' board nR s b
 command xs board nR s b
   | head xs == "quit" = return ()
   | head xs == "c" = do
@@ -113,7 +73,106 @@ command xs board nR s b
         writeCells (newboard \\ board) nR "0"
         writeCells (board \\ newboard) nR "."
         repeat' newboard nR s b
+  | head xs == "l" = do
+    let number = read $ head $ tail xs
+    liveboard board number nR s b
+  | head xs == "?" = do
+    let str =
+          "Velkommen til Game of Life.\n"
+            ++ "c n -> Opprett et nytt brett med n størrelse.\n"
+            ++ "n (y1,x1)..(yk,xk) -> Opprett levende noder med tupler.\n"
+            ++ "e (y1,x1)..(yk,xk) -> Slett levende noder med tupler.\n"
+            ++ "b m n -> Tomme noder blir levende dersom den har m <= naboer <= n.\n"
+            ++ "s m n -> Levende noder overlever dersom den har m <= naboer <= n.\n"
+            ++ "w -> Skriver ut tupler som lever akkurat nå, samt reglene.\n"
+            ++ "r name -> Les inn fil hvor name er filnavnet (parser dessverre kun enkle sifre).\n"
+            ++ "enter -> Gå frem en iterasjon (du må skrive enter i input, fikk ikke til noe annet).\n)"
+            ++ "l x -> Gå inn i live mode hvor x er antall iterasjoner.\n"
+    if s /= [] || b /= []
+      then do
+        let strWithRules =
+              "Nåværende regler: b -> ("
+                ++ show (head b)
+                ++ ", "
+                ++ show (last b)
+                ++ "), "
+                ++ "s -> ("
+                ++ show (head s)
+                ++ ", "
+                ++ show (last s)
+                ++ ")"
+        writeAt (0, nR + 4) (str ++ strWithRules)
+        goto (0, nR + 2)
+        repeat' board nR s b
+      else do
+        let strWithoutRules = "Det finnes ikke regler for s og b enda..."
+        writeAt (0, nR + 4) (str ++ strWithoutRules)
+        goto (0, nR + 2)
+        repeat' board nR s b
   | otherwise = repeat' board nR s b
+
+clr :: IO ()
+clr = putStr "\ESC[2J"
+
+liveboard :: Board -> Int -> Int -> [Int] -> [Int] -> IO ()
+liveboard board number nR s b =
+  if number /= 0
+    then do
+      let newboard = nextgen board nR s b
+      if newboard == board
+        then do
+          clearMessage nR
+          writeAt (0, nR + 4) "Stable Configuration"
+          repeat' board nR s b
+        else do
+          writeCells (newboard \\ board) nR "0"
+          writeCells (board \\ newboard) nR "."
+          wait 1000000
+          liveboard newboard (number - 1) nR s b
+    else repeat' board nR s b
+
+wait :: Int -> IO ()
+wait n = sequence_ [return () | _ <- [1 .. n]]
+
+isAlive :: Board -> Pos -> Bool
+isAlive b p = p `elem` b
+
+isEmpty :: Board -> Pos -> Bool
+isEmpty b p = not (isAlive b p)
+
+writeTop :: (Show a, Integral a) => a -> IO ()
+writeTop nR = writeAt (lft + 1, 0) (concat [show (mod i 10) ++ " " | i <- [1 .. nR]] ++ "\n")
+
+lft :: Integer
+lft = 3
+
+writeAt :: (Show a1, Show a2) => (a2, a1) -> String -> IO ()
+writeAt (x, y) xs = do
+  goto (x, y)
+  putStr xs
+
+goto :: (Show a1, Show a2) => (a2, a1) -> IO ()
+goto (x, y) = putStr ("\ESC[" ++ show y ++ ";" ++ show x ++ "H")
+
+writeRow :: (Show a1, Ord a1, Num a1, Num a2, Enum a2) => a1 -> a2 -> IO ()
+writeRow i nR = do
+  writeAt (if i > 9 then lft - 2 else lft - 1, 1 + i) (show i)
+  mapM_ (\i -> putStr " .") [1 .. nR]
+  putStrLn ""
+
+brett :: (Show a1, Integral a1) => a1 -> IO ()
+brett nR
+  | nR < 99 && nR > 0 = do
+    clr
+    writeTop nR
+    mapM_ (`writeRow` nR) [1 .. nR]
+  | otherwise = error "Number must be bigger than 0 and lower than 99"
+
+convert :: [String] -> [Pos]
+convert [] = []
+convert (x : y : xs)
+  | null x || null y = []
+  | otherwise = (read x, read y) : convert xs
 
 readFile' :: String -> IO ()
 readFile' name = do
@@ -136,13 +195,14 @@ tokenizer (x : xs)
   | x `elem` t = tokenizer xs
   | otherwise = [x] : tokenizer xs
   where
-    t = "*+(), "
+    t = "+*(), "
 
 writeToScreen :: Int -> Board -> [Int] -> [Int] -> IO ()
+writeToScreen _ _ [] [] = return ()
 writeToScreen nR board s b = do
   let string = str ++ unwords (foldl (\x (a, b) -> "(" : show a : ", " : show b : ")" : x) [] board)
   clearMessage nR
-  writeAt (0, nR + 4) string
+  writeAt ((nR + 4) - 12, 0) string
   goto (0, nR + 2)
   where
     str =
